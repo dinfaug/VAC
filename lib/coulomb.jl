@@ -1,5 +1,7 @@
 using OffsetArrays
 
+
+
 function Coulomb_kernel(Lx, Ly, Lz, e_rad)
         K = zeros(Lx, Ly, Lz)
         kw_max = 5 # maximum number of the periods in k-space

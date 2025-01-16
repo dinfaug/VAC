@@ -66,6 +66,43 @@ function initialize(state::State)
     for r in CartesianIndices(zeros(Lx,Ly,Lz))
         for i in 1:2:nhops
             rnd = rand(LogUniform(W0_min, W0_max))
+            state.We_full[i,r] = rnd
+            state.We_full[i+1, move_r(r,hops[i])] = state.We_full[i,r]
+            state.Wh_full[i,r] = rnd
+            state.Wh_full[i+1, move_r(r,hops[i])] = state.Wh_full[i,r]
+        end
+    end
+
+    # Make mini-tree
+    fill_mini_tree!(state.We_full)    
+    fill_mini_tree!(state.Wh_full)  
+    
+    for id in 1:state.N
+        state.W[id] = get_hop_rate(state, id)
+    end
+    for y in 1:Ly
+        for z in 1:Lz
+            for inj in 1:4
+                state.Winj[inj, y, z] = get_inj_rate(state, inj, y, z)
+            end
+        end
+    end
+
+    state.trees = Dict()
+    state.trees[:hop] = RateTree(state.W)
+    state.trees[:inj] = RateTree(state.Winj) 
+    state.trees[:gen] = RateTree(state.Wgen)    
+   
+    return state
+    
+end
+    
+    
+#### Filling of the dictionary W with the probabilities of the hops between all centers           
+
+    for r in CartesianIndices(zeros(Lx,Ly,Lz))
+        for i in 1:2:nhops
+            rnd = rand(LogUniform(W0_min, W0_max))
             state.We_full[i,r] === rnd
            #print(move_r(r,hops[i]))
             state.We_full[i+1, move_r(r,hops[i])] === state.We_full[i,r]
