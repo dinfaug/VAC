@@ -1,4 +1,5 @@
 mutable struct State   # describe system state
+    
     dt::Float64 # time step
     r::Vector{CartesianIndex{3}} # coordinates of the particles (all)
     types::Vector{Symbol}
@@ -21,6 +22,7 @@ mutable struct State   # describe system state
     trees::Dict{Symbol, RateTree} # tree of rates 
     free_ids::Vector{Int}
     State() = initialize(new()) # structure with the current information about the system 
+    
 end
 
 function initialize(state::State)
@@ -28,6 +30,7 @@ function initialize(state::State)
     state.r = findall(mask) # array of particle coordinates
     state.N = length(state.r)  # number of particle
     state.types = fill(:none, state.N)
+    
     for (id, r) in enumerate(state.r)
         if doping[r] > 0
             state.types[id] = :e
@@ -35,19 +38,26 @@ function initialize(state::State)
             state.types[id] = :h
         end
     end
+    
     state.q = [q[t] for t in state.types]
     state.ids = zeros(Int, Lx, Ly, Lz)
     state.ids[mask] = 1:state.N
     state.free_ids = []
     
-    state.We_full = zeros(10, Lx, Ly, Lz) # rates depending on initial and final coordinat  
+    state.We_full = zeros(10, Lx, Ly, Lz) # rates depending on initial and final coordinate  
     state.Wh_full = zeros(10, Lx, Ly, Lz)
     
     state.W = zeros(state.N)
     state.Winj = zeros(4, Ly, Lz)
-       
-    state.Ee = Ee_mean .+ Ec*randn(Lx, Ly, Lz)
-    state.Eh = Eh_mean .+ Ec*randn(Lx, Ly, Lz)
+
+    state.Ee = zeros(Lx, Ly, Lz)
+    state.Eh = zeros(Lx, Ly, Lz)
+    
+    state.Ee[1:(Lp),:,:] = Ee_mean_1 .+ Ec*randn(Lp, Ly, Lz)
+    state.Eh[1:(Lp),:,:] = Eh_mean_1 .+ Ec*randn(Lp, Ly, Lz)
+
+    state.Ee[(Lp+1):Lx,:,:] = Ee_mean_2 .+ Ec*randn((Lx-Lp), Ly, Lz)
+    state.Eh[(Lp+1):Lx,:,:] = Eh_mean_2 .+ Ec*randn((Lx-Lp), Ly, Lz)
     
     state.Wrec = fill(W_exc_rec, Lx, Ly, Lz)
     state.Wgen =  @.  state.Wrec*exp(-(state.Ee - state.Eh)/T)
@@ -80,6 +90,7 @@ function initialize(state::State)
     for id in 1:state.N
         state.W[id] = get_hop_rate(state, id)
     end
+    
     for y in 1:Ly
         for z in 1:Lz
             for inj in 1:4
@@ -96,42 +107,27 @@ function initialize(state::State)
     return state
     
 end
-    
-    
-#### Filling of the dictionary W with the probabilities of the hops between all centers           
 
-    for r in CartesianIndices(zeros(Lx,Ly,Lz))
-        for i in 1:2:nhops
-            rnd = rand(LogUniform(W0_min, W0_max))
-            state.We_full[i,r] === rnd
-           #print(move_r(r,hops[i]))
-            state.We_full[i+1, move_r(r,hops[i])] === state.We_full[i,r]
-            state.Wh_full[i,r] === rnd
-            state.Wh_full[i+1, move_r(r,hops[i])] === state.Wh_full[i,r]
-        end
-    end
-    # Make mini-tree
-    fill_mini_tree!(state.We_full)    
-    fill_mini_tree!(state.Wh_full)  
-    
-    for id in 1:state.N
-        state.W[id] = get_hop_rate(state, id)
-    end
-    for y in 1:Ly
-        for z in 1:Lz
-            for inj in 1:4
-                state.Winj[inj, y, z] = get_inj_rate(state, inj, y, z)
-            end
-        end
-    end
+mutable struct Info   # collected information about the system
+    frames::Int64
+    time::Vector{Float64}
+    cur_time::Float64
+    trajectories::Array{Float64, 3}
+    fillings::Array{Float64, 4}
+    current::Vector{Float64}
+    Info(state, frames) = initialize(new(), state, frames)
+    total::DefaultDict{Symbol, Int64}    
+end
 
-    state.trees = Dict()
-    state.trees[:hop] = RateTree(state.W)
-    state.trees[:inj] = RateTree(state.Winj) 
-    state.trees[:gen] = RateTree(state.Wgen)    
-   
-    return state
-    
+function initialize(info::Info, state::State, frames::Int)
+    info.frames = frames
+    info.time = zeros(frames)
+    info.cur_time = 0.0
+    info.trajectories = zeros(frames, 3, state.N)
+    info.fillings = zeros(frames, Lx, Ly, Lz)
+    info.current = zeros(frames)
+    info.total = DefaultDict{Symbol, Int64}(0)
+    return info
 end;
 
 # injection 

@@ -234,69 +234,41 @@ function simulate(state::State, steps::Int, save_every::Int)  # main function, s
         info.current[frame] = sum_dx/sum_dt*a0/Lx/Ly/Lz # Check! 
     end
     #mean_current = sum_dx/sum_dt*a0/Lx/Ly
-    #if info.total[:inj_wrong_dEbr] > 0
-       # @warn("dEbr is too big. info.total[:inj_wrong_dEbr] = $(info.total[:inj_wrong_dEbr])")
-    #end
+    if info.total[:inj_wrong_dEbr] > 0
+        @warn("dEbr is too big. info.total[:inj_wrong_dEbr] = $(info.total[:inj_wrong_dEbr])")
+    end
     return info;
 end;
 
-V_range = range(-0.5*eV, 0.5*eV, 5)
+state = State();
+add_free_ids(state, 10)
+values(state.trees[:hop]);
+
+mutable struct stime
+    st::Float64
+end
+
+S=stime(0)
+V_range = range(-1*eV, 1*eV, 10)
 current_vs_V = zeros(length(V_range))
 for i = 1:length(V_range)
-    save_every = 2000
-    steps = 4_000_0
-    global state, info
+    Random.seed!(0)
+    save_every = 1000
     state = State();
     state.V = V_range[i]
-    info = simulate(state, steps, save_every)
-    current_vs_V[i] = mean(info.current[info.frames÷2:end])
+    info = simulate(state, 10*save_every, save_every)
+    current_vs_V[i] = mean(info.current[500:end])
+    S.st = info.cur_time + S.st
 end
 
 p = plot(V_range/eV, current_vs_V);
-plot!(xlabel="V", ylabel="I",legend=false)
+plot!(xlabel="V", ylabel="I")
 #plot!(size = (800, 600))
 savefig(p,"UI_pn_1000_1000_L20_10_10.png")
 
-#μ = e*W0_max*a0^2/T;
-#coeff = e*base_doping/a0^3*μ*Ly*Lz/(a0*Lx);
-phys_a0 = 6; # real QD size, nm
-phys_W0 = 1; # real rate W0, 1/ns
 
-@time begin
-    Random.seed!(0)
-    save_every = 100;
-    state = State();
-    state.V = 1.6*eV
-    info = simulate(state, 1000*save_every, save_every)
-end
 
-#ProfileSVG.set_default(width=1200, timeunit=:s)
-#@profview simulate(state, 1000*save_every, save_every)
-h = heatmap(phys_a0*(1:Lx), info.time, mean(info.fillings[:,:,:,:], dims=(3,4))[:,:,1,1], colormap=:berlin, clim=(x->(-0.5,0.5).*maximum(abs, x)));
-plot!(xlabel = "x coordinate, nm");
-plot!(ylabel = "time, ns", right_margin=10Plots.mm);
-savefig(h, "fillings_$(base_doping).png");
 
-Phi = zeros(Lx,Ly,Lz)
-for i in 1:Lx
-    for j in 1:Ly
-        for k in 1:Lz
-            Phi[i,j,k] = potential(state, CartesianIndex(i,j,k))
-        end
-    end
-end
-
-a = 6 # real lattice parameter in nanometers
-#heatmap(phi[Lx,:,:], right_margin=10Plots.mm)
-#plot(phi[Lx+2,mlt*Int(Lz/2),:])
-p1 = plot(a*(0.5:Lp), (Ee_mean_1 .- e*mean(Phi, dims=(2,3))[1:Lp,1,1])/eV, lw=2);
-plot!(a*(Lp-0.5:Lx), (Ee_mean_2 .- e*mean(Phi, dims=(2,3))[Lp:Lx,1,1] )/eV, lw=2)
-plot!(a*(0.5:Lp), (Eh_mean_1 .- e*mean(Phi, dims=(2,3))[1:Lp,1,1] )/eV, lw=2) 
-plot!(a*(Lp-0.5:Lx), (Eh_mean_2 .- e*mean(Phi, dims=(2,3))[Lp:Lx,1,1])/eV, lw=2) 
-plot!(a*[-10, 0], [EFl, EFl]./eV, color="black", lw=2)
-plot!(a*[Lx, Lx+10], [EFl + state.V, EFl + state.V]./eV, color="black", lw=2)
-plot!(legend=false, xlabel="x coordinate, nm", ylabel="Energy, eV")
-savefig(p1,"2pnE(x).png")
 
 
 
